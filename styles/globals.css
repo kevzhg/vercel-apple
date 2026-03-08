@@ -2,28 +2,96 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 255, 255, 255;
-  --background-end-rgb: 255, 255, 255;
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
+    --vn-primary: #ff005c;
+    --vn-secondary: #ff6927;
+    --vn-tertiary: #ffc227;
+    --foreground-rgb: 0, 0, 0;
+    --background-start-rgb: 255, 255, 255;
+    --background-end-rgb: 255, 255, 255;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --foreground-rgb: 255, 255, 255;
+      --background-start-rgb: 0, 0, 0;
+      --background-end-rgb: 0, 0, 0;
+    }
+  }
+
+  body {
+    color: rgb(var(--foreground-rgb));
+    background: linear-gradient(
+        to bottom,
+        transparent,
+        rgb(var(--background-end-rgb))
+      )
+      rgb(var(--background-start-rgb));
+    font-family: var(--font-proxima-regular), 'Proxima Nova', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
   }
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+@layer components {
+  .btn-viral-primary {
+    @apply px-8 py-3 bg-gradient-to-r from-primary-500 to-secondary-500 text-white rounded-full font-extrabold hover:shadow-2xl hover:scale-105 transition-all duration-300;
+  }
+
+  .btn-viral-secondary {
+    @apply px-8 py-3 bg-transparent border-2 border-white text-white rounded-full font-extrabold hover:bg-white/10 transition-all duration-300;
+  }
+
+  .card-viral {
+    @apply bg-white rounded-2xl shadow-xl p-8 hover:shadow-2xl transition-all duration-300 hover:-translate-y-1;
+  }
+
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary-500 via-secondary-500 to-tertiary-500;
+  }
+
+  .gradient-text-simple {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary-500 to-secondary-500;
+  }
+
+  /* Fallback for gradient text - ensures visibility on all backgrounds */
+  .gradient-text-simple {
+    background-image: linear-gradient(to right, var(--vn-primary), var(--vn-secondary));
+    -webkit-background-clip: text;
+    background-clip: text;
+    /* Add fallback color for browsers that don't support background-clip: text */
+    color: var(--vn-primary);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .gradient-text-simple {
+      /* Use lighter colors in dark mode for better visibility */
+      background-image: linear-gradient(to right, #ff4d88, #ff8c5a);
+      -webkit-background-clip: text;
+      background-clip: text;
+    }
+  }
+
+  .hero-gradient {
+    @apply bg-gradient-to-br from-primary-500 via-secondary-500 to-tertiary-500;
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-float-delayed {
+    animation: float 6s ease-in-out infinite;
+    animation-delay: 2s;
+  }
+
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-20px);
+    }
+  }
 }
 
 @layer utilities {

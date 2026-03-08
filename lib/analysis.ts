@@ -52,6 +52,11 @@ export function analyzeCampaign(posts: PostData[]): CampaignAnalysis {
     .map(([date, data]) => ({ date, ...data }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  // Calculate overall sentiment and creative arcs breakdown from Cortex analysis
+  const metrics = aggregateMetrics(posts);
+  const creativeArcsBreakdown = getCreativeArcsBreakdown(posts);
+  const { nonAppleRelated } = filterApplePosts(posts);
+
   return {
     campaignName,
     totalPosts,
@@ -61,6 +66,10 @@ export function analyzeCampaign(posts: PostData[]): CampaignAnalysis {
     topInfluencers,
     creativeThemes,
     trendData,
+    overallSentiment: metrics.overallSentiment,
+    sentimentScore: metrics.sentimentScore,
+    creativeArcsBreakdown,
+    nonApplePostCount: nonAppleRelated.length,
   };
 }
 
@@ -134,4 +143,129 @@ export function findTopPerformingPosts(posts: PostData[], limit: number = 5): Po
       return rateB - rateA;
     })
     .slice(0, limit);
+}
+
+/**
+ * Filters posts based on Apple relevance from Cortex analysis
+ * Returns both Apple-related and non-Apple related posts
+ */
+export function filterApplePosts(posts: PostData[]): {
+  appleRelated: PostData[];
+  nonAppleRelated: PostData[];
+} {
+  const appleRelated: PostData[] = [];
+  const nonAppleRelated: PostData[] = [];
+
+  posts.forEach(post => {
+    // If no Cortex analysis, assume it's Apple-related
+    if (!post.cortexAnalysis) {
+      appleRelated.push(post);
+    } else if (post.cortexAnalysis.isAppleRelated) {
+      appleRelated.push(post);
+    } else {
+      nonAppleRelated.push(post);
+    }
+  });
+
+  return { appleRelated, nonAppleRelated };
+}
+
+/**
+ * Aggregates metrics across all posts with sentiment analysis
+ */
+export function aggregateMetrics(posts: PostData[]): {
+  totalViews: number;
+  totalEngagement: number;
+  engagementRate: number;
+  overallSentiment: 'positive' | 'negative' | 'neutral';
+  sentimentScore: number;
+  appleRelatedCount: number;
+  nonAppleRelatedCount: number;
+} {
+  const totalViews = posts.reduce((sum, p) => sum + p.metrics.views, 0);
+  const totalLikes = posts.reduce((sum, p) => sum + p.metrics.likes, 0);
+  const totalComments = posts.reduce((sum, p) => sum + p.metrics.comments, 0);
+  const totalShares = posts.reduce((sum, p) => sum + p.metrics.shares, 0);
+  const totalEngagement = totalLikes + totalComments + totalShares;
+  const engagementRate = totalViews > 0 ? (totalEngagement / totalViews) * 100 : 0;
+
+  // Calculate overall sentiment from Cortex analysis
+  const postsWithSentiment = posts.filter(p => p.cortexAnalysis?.sentimentScore !== undefined);
+  const avgSentiment = postsWithSentiment.length > 0
+    ? postsWithSentiment.reduce((sum, p) => sum + (p.cortexAnalysis?.sentimentScore || 0), 0) / postsWithSentiment.length
+    : 0;
+
+  let overallSentiment: 'positive' | 'negative' | 'neutral' = 'neutral';
+  if (avgSentiment > 0.2) overallSentiment = 'positive';
+  else if (avgSentiment < -0.2) overallSentiment = 'negative';
+
+  // Count Apple vs non-Apple posts
+  const { appleRelated, nonAppleRelated } = filterApplePosts(posts);
+
+  return {
+    totalViews,
+    totalEngagement,
+    engagementRate,
+    overallSentiment,
+    sentimentScore: avgSentiment,
+    appleRelatedCount: appleRelated.length,
+    nonAppleRelatedCount: nonAppleRelated.length,
+  };
+}
+
+/**
+ * Groups posts by creative arc from Cortex analysis
+ */
+export function groupByCreativeArc(posts: PostData[]): Map<string, PostData[]> {
+  const grouped = new Map<string, PostData[]>();
+
+  posts.forEach(post => {
+    const arcs = post.cortexAnalysis?.creativeArcs || ['uncategorized'];
+    arcs.forEach(arc => {
+      if (!grouped.has(arc)) {
+        grouped.set(arc, []);
+      }
+      grouped.get(arc)!.push(post);
+    });
+  });
+
+  return grouped;
+}
+
+/**
+ * Gets creative arc breakdown with metrics
+ */
+export function getCreativeArcsBreakdown(posts: PostData[]): Map<string, {
+  count: number;
+  avgEngagementRate: number;
+  totalViews: number;
+}> {
+  const arcsMap = groupByCreativeArc(posts);
+  const breakdown = new Map<string, { count: number; avgEngagementRate: number; totalViews: number }>();
+
+  arcsMap.forEach((arcPosts, arcName) => {
+    const totalViews = arcPosts.reduce((sum, p) => sum + p.metrics.views, 0);
+    const avgEngagementRate = arcPosts.reduce((sum, p) => sum + calculateEngagementRate(p), 0) / arcPosts.length;
+
+    breakdown.set(arcName, {
+      count: arcPosts.length,
+      avgEngagementRate,
+      totalViews,
+    });
+  });
+
+  return breakdown;
+}
+
+/**
+ * Enriches posts with engagement rate if not already calculated
+ */
+export function enrichPostsWithEngagementRate(posts: PostData[]): PostData[] {
+  return posts.map(post => ({
+    ...post,
+    metrics: {
+      ...post.metrics,
+      engagementRate: post.metrics.engagementRate ?? calculateEngagementRate(post),
+    },
+  }));
 }

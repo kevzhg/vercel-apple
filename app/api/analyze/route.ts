@@ -1,9 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { analyzeCampaign } from '@/lib/analysis';
 import { PostData } from '@/lib/types';
+import { parseCreatorPostsCSV, calculateCreatorPostsStats } from '@/lib/creator-posts-parser';
 
 export async function POST(request: NextRequest) {
   try {
+    const contentType = request.headers.get('content-type');
+
+    // Handle CSV file upload
+    if (contentType?.includes('multipart/form-data')) {
+      const formData = await request.formData();
+      const csvFile = formData.get('csv') as File;
+
+      if (!csvFile) {
+        return NextResponse.json(
+          { error: 'No CSV file provided' },
+          { status: 400 }
+        );
+      }
+
+      // Validate file type
+      if (!csvFile.name.endsWith('.csv')) {
+        return NextResponse.json(
+          { error: 'Invalid file type. Please upload a CSV file.' },
+          { status: 400 }
+        );
+      }
+
+      // Read and parse CSV
+      const csvText = await csvFile.text();
+      const posts = parseCreatorPostsCSV(csvText);
+      const stats = calculateCreatorPostsStats(posts);
+
+      // Analyze the campaign data
+      const analysis = analyzeCampaign(posts);
+
+      return NextResponse.json({
+        ...analysis,
+        dataSource: 'Creator Monitored Posts',
+        totalPostsUploaded: posts.length,
+        stats,
+      });
+    }
+
+    // Handle JSON input (existing behavior)
     const posts: PostData[] = await request.json();
 
     // Validate input
@@ -21,7 +61,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Analysis error:', error);
     return NextResponse.json(
-      { error: 'Failed to analyze campaign data' },
+      {
+        error: 'Failed to analyze campaign data',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   }
@@ -31,7 +74,11 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   return NextResponse.json({
     message: 'POST your social media post data here to analyze campaigns',
-    expectedFormat: {
+    supports: {
+      json: 'Array of PostData objects',
+      csv: 'Creator Monitored Posts CSV file (multipart/form-data with "csv" field)',
+    },
+    jsonFormat: {
       id: 'string',
       platform: 'instagram | tiktok | twitter',
       influencer: 'string',
@@ -48,6 +95,24 @@ export async function GET() {
       },
       timestamp: 'ISO date string',
       campaign: 'string'
+    },
+    csvFormat: {
+      requiredColumns: [
+        'CHANNEL_NAME',
+        'PLATFORM',
+        'POST_URL',
+        'VIEWS_UNIVERSAL',
+        'PUBLISHED_DATETIME'
+      ],
+      optionalColumns: [
+        'FOLLOWERS',
+        'IS_SPONSORED',
+        'POST_DESCRIPTION',
+        'POST_SUMMARY',
+        'LIKES_PUBLIC',
+        'COMMENTS_PUBLIC',
+        'SHARES_PUBLIC'
+      ]
     }
   });
 }
